@@ -1,0 +1,2756 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Sales Visit Tracker</title>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 5px;
+            line-height: 1.6;
+            -webkit-text-size-adjust: 100%;
+            -webkit-tap-highlight-color: transparent;
+            touch-action: manipulation;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.98);
+            border-radius: 24px;
+            box-shadow: 0 25px 50px rgba(0,0,0,0.15);
+            overflow: hidden;
+            backdrop-filter: blur(10px);
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 40px 30px;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .header::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grain" width="100" height="100" patternUnits="userSpaceOnUse"><circle cx="25" cy="25" r="1" fill="white" opacity="0.1"/><circle cx="75" cy="75" r="1" fill="white" opacity="0.1"/><circle cx="50" cy="10" r="0.5" fill="white" opacity="0.1"/></pattern></defs><rect width="100" height="100" fill="url(%23grain)"/></svg>');
+            opacity: 0.3;
+        }
+
+        .header h1 {
+            font-size: 3rem;
+            margin-bottom: 15px;
+            font-weight: 800;
+            position: relative;
+            z-index: 1;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .header p {
+            font-size: 1.2rem;
+            opacity: 0.95;
+            position: relative;
+            z-index: 1;
+            font-weight: 400;
+        }
+
+        /* Live Location Status Bar */
+        .location-status-bar {
+            background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
+            color: white;
+            padding: 15px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: 600;
+            position: sticky;
+            top: 0;
+            z-index: 200;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .location-status-bar.offline {
+            background: linear-gradient(135deg, #f56565 0%, #e53e3e 100%);
+        }
+
+        .location-info {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .location-pulse {
+            width: 12px;
+            height: 12px;
+            background: white;
+            border-radius: 50%;
+            animation: locationPulse 2s infinite;
+        }
+
+        @keyframes locationPulse {
+            0% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.7; transform: scale(1.2); }
+            100% { opacity: 1; transform: scale(1); }
+        }
+
+        .nav-tabs {
+            display: flex;
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            border-bottom: 3px solid #dee2e6;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+        }
+
+        .nav-tabs::-webkit-scrollbar {
+            display: none;
+        }
+
+        .nav-tab {
+            flex: 1;
+            min-width: 120px;
+            padding: 18px 12px;
+            text-align: center;
+            background: none;
+            border: none;
+            font-size: 0.95rem;
+            font-weight: 700;
+            color: #495057;
+            cursor: pointer;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+            white-space: nowrap;
+        }
+
+        .nav-tab::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+            transition: left 0.5s;
+        }
+
+        .nav-tab:hover::before {
+            left: 100%;
+        }
+
+        .nav-tab.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3);
+        }
+
+        .nav-tab:hover:not(.active) {
+            background: linear-gradient(135deg, #e9ecef 0%, #f8f9fa 100%);
+            transform: translateY(-1px);
+        }
+
+        .tab-content {
+            display: none;
+            padding: 40px 30px;
+            animation: fadeIn 0.5s ease-in-out;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Sales Person Setup Modal */
+        .setup-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 2000;
+        }
+
+        .setup-container {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            max-width: 500px;
+            width: 90%;
+            text-align: center;
+            box-shadow: 0 25px 50px rgba(0,0,0,0.3);
+        }
+
+        .setup-container h2 {
+            color: #2d3748;
+            margin-bottom: 20px;
+            font-size: 1.8rem;
+        }
+
+        .setup-container p {
+            color: #4a5568;
+            margin-bottom: 30px;
+            line-height: 1.6;
+        }
+
+        .form-container {
+            background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+            border: 1px solid rgba(102, 126, 234, 0.1);
+        }
+
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 25px;
+            margin-bottom: 30px;
+        }
+
+        .form-group {
+            position: relative;
+        }
+
+        .form-group label {
+            font-weight: 700;
+            color: #2d3748;
+            margin-bottom: 10px;
+            font-size: 0.95rem;
+            display: block;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 18px 16px;
+            border: 2px solid #e2e8f0;
+            border-radius: 12px;
+            font-size: 16px;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            background: white;
+            font-family: inherit;
+            min-height: 48px;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
+            touch-action: manipulation;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1);
+            transform: translateY(-1px);
+        }
+
+        .form-group textarea {
+            resize: vertical;
+            min-height: 120px;
+        }
+
+        .btn {
+            padding: 18px 24px;
+            border: none;
+            border-radius: 12px;
+            font-size: 1rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            position: relative;
+            overflow: hidden;
+            min-height: 48px;
+            min-width: 48px;
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+            transition: left 0.5s;
+        }
+
+        .btn:hover::before {
+            left: 100%;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
+            color: white;
+            box-shadow: 0 4px 15px rgba(72, 187, 120, 0.3);
+        }
+
+        .btn-success:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 25px rgba(72, 187, 120, 0.4);
+        }
+
+        .btn-secondary {
+            background: linear-gradient(135deg, #718096 0%, #4a5568 100%);
+            color: white;
+            box-shadow: 0 4px 15px rgba(113, 128, 150, 0.3);
+        }
+
+        .btn-secondary:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 25px rgba(113, 128, 150, 0.4);
+        }
+
+        .btn-camera {
+            background: linear-gradient(135deg, #ed8936 0%, #dd6b20 100%);
+            color: white;
+            box-shadow: 0 4px 15px rgba(237, 137, 54, 0.3);
+        }
+
+        .btn-camera:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 25px rgba(237, 137, 54, 0.4);
+        }
+
+        .visits-grid {
+            display: grid;
+            gap: 25px;
+            margin-top: 30px;
+        }
+
+        .visit-card {
+            background: linear-gradient(135deg, #ffffff 0%, #f7fafc 100%);
+            border-radius: 20px;
+            padding: 25px;
+            border-left: 6px solid #667eea;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+            border: 1px solid rgba(102, 126, 234, 0.1);
+        }
+
+        .visit-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 40px rgba(0,0,0,0.15);
+            border-left-color: #764ba2;
+        }
+
+        .visit-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #e2e8f0;
+        }
+
+        .visit-title {
+            font-size: 1.4rem;
+            font-weight: 800;
+            color: #2d3748;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .visit-date {
+            color: #718096;
+            font-size: 0.95rem;
+            font-weight: 600;
+            background: #edf2f7;
+            padding: 8px 16px;
+            border-radius: 20px;
+        }
+
+        .visit-details {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 20px;
+        }
+
+        .visit-detail {
+            background: rgba(102, 126, 234, 0.05);
+            padding: 15px;
+            border-radius: 12px;
+            border-left: 4px solid #667eea;
+        }
+
+        .visit-detail-label {
+            font-size: 0.8rem;
+            color: #4a5568;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 5px;
+        }
+
+        .visit-detail-value {
+            font-size: 1.1rem;
+            color: #2d3748;
+            font-weight: 600;
+        }
+
+        .search-section {
+            background: linear-gradient(135deg, #edf2f7 0%, #e2e8f0 100%);
+            padding: 25px;
+            border-radius: 20px;
+            margin-bottom: 30px;
+            border: 1px solid rgba(102, 126, 234, 0.1);
+        }
+
+        .search-grid {
+            display: grid;
+            grid-template-columns: 1fr auto auto;
+            gap: 20px;
+            align-items: end;
+        }
+
+        #map {
+            height: 600px;
+            width: 100%;
+            border-radius: 20px;
+            margin-top: 30px;
+            box-shadow: 0 15px 40px rgba(0,0,0,0.15);
+            border: 3px solid rgba(102, 126, 234, 0.3);
+            position: relative;
+            z-index: 1;
+        }
+
+        .map-container {
+            position: relative;
+            width: 100%;
+            margin-top: 20px;
+        }
+
+        .location-details-card {
+            background: linear-gradient(135deg, #f0fff4 0%, #c6f6d5 100%);
+            border: 2px solid #48bb78;
+            border-radius: 15px;
+            padding: 20px;
+            margin: 15px 0;
+            box-shadow: 0 8px 25px rgba(72, 187, 120, 0.2);
+        }
+
+        .location-details-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+
+        .location-detail-item {
+            background: white;
+            padding: 12px;
+            border-radius: 10px;
+            border-left: 4px solid #48bb78;
+        }
+
+        .location-detail-label {
+            font-size: 0.8rem;
+            color: #2d5016;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 5px;
+        }
+
+        .location-detail-value {
+            font-size: 1rem;
+            color: #1a202c;
+            font-weight: 600;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            margin-right: 10px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.3);
+        }
+
+        .status-online {
+            background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
+            animation: pulse 2s infinite;
+        }
+
+        .status-offline {
+            background: linear-gradient(135deg, #f56565 0%, #e53e3e 100%);
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.7; transform: scale(1.1); }
+            100% { opacity: 1; transform: scale(1); }
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 25px;
+            margin-bottom: 40px;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 20px;
+            text-align: center;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+            transform: rotate(45deg);
+            transition: all 0.5s;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px) scale(1.02);
+            box-shadow: 0 20px 40px rgba(102, 126, 234, 0.4);
+        }
+
+        .stat-card:hover::before {
+            transform: rotate(45deg) translate(20px, 20px);
+        }
+
+        .stat-number {
+            font-size: 3rem;
+            font-weight: 900;
+            margin-bottom: 10px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .stat-label {
+            font-size: 1rem;
+            opacity: 0.95;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .alert {
+            padding: 20px 25px;
+            border-radius: 15px;
+            margin-bottom: 25px;
+            font-weight: 600;
+            border-left: 5px solid;
+        }
+
+        .alert-success {
+            background: linear-gradient(135deg, #f0fff4 0%, #c6f6d5 100%);
+            color: #22543d;
+            border-left-color: #48bb78;
+        }
+
+        .alert-info {
+            background: linear-gradient(135deg, #ebf8ff 0%, #bee3f8 100%);
+            color: #2a4365;
+            border-left-color: #4299e1;
+        }
+
+        /* Camera Modal Styles */
+        .camera-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .camera-container {
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            max-width: 90vw;
+            max-height: 90vh;
+            text-align: center;
+            box-shadow: 0 25px 50px rgba(0,0,0,0.3);
+        }
+
+        .camera-video {
+            width: 100%;
+            max-width: 500px;
+            height: auto;
+            border-radius: 15px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        .camera-controls {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .photo-preview-container {
+            background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%);
+            border-radius: 15px;
+            padding: 20px;
+            margin-top: 20px;
+            border: 2px dashed #cbd5e0;
+            transition: all 0.3s ease;
+        }
+
+        .photo-preview-container.has-photo {
+            border-color: #667eea;
+            background: linear-gradient(135deg, #ebf4ff 0%, #dbeafe 100%);
+        }
+
+        .photo-preview {
+            max-width: 100%;
+            max-height: 200px;
+            border-radius: 12px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+        }
+
+        /* Live Location Marker Styles */
+        .live-marker {
+            background: #48bb78;
+            border: 3px solid white;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            box-shadow: 0 0 15px rgba(72, 187, 120, 0.6);
+            animation: liveMarkerPulse 2s infinite;
+        }
+
+        @keyframes liveMarkerPulse {
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.3); opacity: 0.7; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        /* Enhanced Map Controls */
+        .map-controls {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .map-control-btn {
+            background: white;
+            border: 2px solid #667eea;
+            border-radius: 8px;
+            padding: 8px 12px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: #667eea;
+            cursor: pointer;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            transition: all 0.3s ease;
+            min-width: 120px;
+        }
+
+        .map-control-btn:hover {
+            background: #667eea;
+            color: white;
+            transform: translateY(-1px);
+        }
+
+        .map-control-btn.active {
+            background: #667eea;
+            color: white;
+        }
+
+        @media (max-width: 768px) {
+            body {
+                padding: 2px;
+            }
+            
+            .container {
+                margin: 2px;
+                border-radius: 16px;
+            }
+            
+            .header {
+                padding: 25px 15px;
+            }
+            
+            .header h1 {
+                font-size: 2rem;
+                margin-bottom: 10px;
+            }
+            
+            .header p {
+                font-size: 1rem;
+            }
+            
+            .nav-tabs {
+                flex-wrap: nowrap;
+                padding: 0 5px;
+            }
+            
+            .nav-tab {
+                padding: 16px 8px;
+                font-size: 0.85rem;
+                min-width: 100px;
+            }
+            
+            .search-grid {
+                grid-template-columns: 1fr;
+                gap: 15px;
+            }
+            
+            .form-grid {
+                grid-template-columns: 1fr;
+                gap: 20px;
+            }
+            
+            .tab-content {
+                padding: 20px 15px;
+            }
+            
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 15px;
+            }
+            
+            .visit-details {
+                grid-template-columns: 1fr;
+                gap: 15px;
+            }
+
+            .location-status-bar {
+                flex-direction: column;
+                gap: 8px;
+                text-align: center;
+                padding: 12px 15px;
+                font-size: 0.9rem;
+            }
+            
+            .form-container {
+                padding: 20px 15px;
+            }
+            
+            .search-section {
+                padding: 20px 15px;
+            }
+            
+            .visit-card {
+                padding: 20px 15px;
+            }
+            
+            .btn {
+                width: 100%;
+                margin-bottom: 10px;
+                padding: 20px 16px;
+                font-size: 0.95rem;
+            }
+            
+            .camera-container {
+                padding: 20px 15px;
+                margin: 10px;
+            }
+            
+            .camera-controls {
+                flex-direction: column;
+                gap: 10px;
+            }
+            
+            .camera-controls .btn {
+                width: 100%;
+            }
+
+            #map {
+                height: 400px;
+            }
+
+            .map-controls {
+                position: relative;
+                top: auto;
+                right: auto;
+                flex-direction: row;
+                flex-wrap: wrap;
+                margin-bottom: 15px;
+            }
+
+            .map-control-btn {
+                min-width: auto;
+                flex: 1;
+            }
+
+            .location-details-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .header h1 {
+                font-size: 1.6rem;
+                line-height: 1.2;
+            }
+            
+            .header p {
+                font-size: 0.9rem;
+            }
+            
+            .stat-number {
+                font-size: 2rem;
+            }
+            
+            .stat-label {
+                font-size: 0.85rem;
+            }
+            
+            .nav-tab {
+                padding: 14px 6px;
+                font-size: 0.8rem;
+                min-width: 90px;
+            }
+            
+            .form-group label {
+                font-size: 0.85rem;
+                margin-bottom: 8px;
+            }
+            
+            .visit-title {
+                font-size: 1.2rem;
+            }
+            
+            .visit-date {
+                font-size: 0.85rem;
+                padding: 6px 12px;
+            }
+            
+            .setup-container {
+                padding: 25px 20px;
+                margin: 15px;
+            }
+            
+            .setup-container h2 {
+                font-size: 1.5rem;
+            }
+            
+            .alert {
+                padding: 15px 20px;
+                font-size: 0.9rem;
+            }
+            
+            #map {
+                height: 350px;
+                margin-top: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Sales Person Setup Modal -->
+    <div id="setupModal" class="setup-modal">
+        <div class="setup-container">
+            <h2>🚀 Welcome to Sales Tracker!</h2>
+            <p>Please enter your name to start live location tracking and begin using the app.</p>
+            <div class="form-group" style="margin-bottom: 20px;">
+                <input type="text" id="salesPersonName" placeholder="Enter your full name" style="text-align: center; font-size: 1.1rem;">
+            </div>
+            <button onclick="setupSalesPerson()" class="btn btn-primary" style="width: 100%;">
+                📍 Start Live Tracking
+            </button>
+        </div>
+    </div>
+
+    <div class="container">
+        <!-- Live Location Status Bar -->
+        <div id="locationStatusBar" class="location-status-bar" style="display: none;">
+            <div class="location-info">
+                <div class="location-pulse"></div>
+                <span id="locationStatusText">🔴 Location tracking offline</span>
+            </div>
+            <div id="currentSalesPersonName"></div>
+        </div>
+
+        <div class="header">
+            <h1>📊 Sales Visit Tracker</h1>
+            <p>Track daily shop visits, manage sales data, and monitor team locations</p>
+        </div>
+
+        <div class="nav-tabs">
+            <button class="nav-tab active" onclick="showTab('add-visit')">➕ Add Visit</button>
+            <button class="nav-tab" onclick="showTab('view-visits')">📋 View Visits</button>
+            <button class="nav-tab" onclick="showTab('track-sales')">🗺️ Track Sales</button>
+            <button class="nav-tab" onclick="showTab('reports')">📈 Reports</button>
+        </div>
+
+        <!-- Add Visit Tab -->
+        <div id="add-visit" class="tab-content active">
+            <h2 style="margin-bottom: 30px; color: #2d3748; font-weight: 800; font-size: 2rem; text-align: center;">📍 Add New Shop Visit</h2>
+            
+            <!-- Location Details Display -->
+            <div id="currentLocationDetails" class="location-details-card" style="display: none;">
+                <h3 style="color: #2d5016; margin-bottom: 15px; font-weight: 700;">📍 Current Location Details</h3>
+                <div id="locationDetailsGrid" class="location-details-grid"></div>
+            </div>
+            
+            <div class="form-container">
+                <form id="visitForm">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="visitDateTime">Visit Date & Time</label>
+                        <input type="datetime-local" id="visitDateTime" readonly style="background-color: #f8f9fa; cursor: not-allowed;">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="salesPerson">Sales Person Name</label>
+                        <input type="text" id="salesPerson" readonly style="background-color: #f8f9fa; cursor: not-allowed;">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="shopName">Shop Name</label>
+                        <input type="text" id="shopName" required placeholder="Enter shop name">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="shopAddress">Shop Address</label>
+                        <input type="text" id="shopAddress" required placeholder="Enter complete address">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="contactPerson">Contact Person</label>
+                        <input type="text" id="contactPerson" required placeholder="Shop owner/manager name">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="phoneNumber">Phone Number</label>
+                        <input type="tel" id="phoneNumber" required placeholder="Enter contact phone number">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="coordinatorName">SS Coordinator Name</label>
+                        <input type="text" id="coordinatorName" required placeholder="Enter coordinator name">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="tenure">Tenure</label>
+                        <input type="text" id="tenure" required placeholder="Enter tenure details">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="district">District</label>
+                        <input type="text" id="district" required placeholder="Enter district name">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="area">Area</label>
+                        <input type="text" id="area" required placeholder="Enter area/locality name">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="visitType">Visit Type</label>
+                        <select id="visitType" required>
+                            <option value="">Select visit type</option>
+                            <option value="Distributor">Distributor</option>
+                            <option value="Wholesaler">Wholesaler</option>
+                            <option value="Hawker">Hawker</option>
+                            <option value="Retailer">Retailer</option>
+                            <option value="Semi Wholesaler">Semi Wholesaler</option>
+                            <option value="Super Stockist">Super Stockist</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="visitNotes">Visit Notes</label>
+                    <textarea id="visitNotes" placeholder="Enter detailed notes about the visit, customer feedback, next steps, etc."></textarea>
+                </div>
+                
+                <div class="form-group">
+                    <label>📷 Shop Photo</label>
+                    <div class="photo-preview-container" id="photoContainer">
+                        <button type="button" onclick="openLiveCamera()" class="btn btn-camera">
+                            📸 Open Live Camera
+                        </button>
+                        <div id="photoPreview" style="display: none; margin-top: 15px;">
+                            <img id="capturedImage" class="photo-preview">
+                            <div style="margin-top: 15px;">
+                                <button type="button" onclick="retakePhoto()" class="btn btn-secondary" style="margin-right: 10px;">
+                                    🔄 Retake Photo
+                                </button>
+                                <button type="button" onclick="removePhoto()" class="btn btn-secondary">
+                                    🗑️ Remove Photo
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 20px; font-size: 1.2rem; padding: 20px;">
+                    📍 Save Visit & Get Location
+                </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- View Visits Tab -->
+        <div id="view-visits" class="tab-content">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2 style="color: #333;">Visit Records</h2>
+                <div style="display: flex; gap: 10px;">
+                    <button onclick="downloadExcel()" class="btn btn-success">
+                        📥 Download All Excel
+                    </button>
+                    <button onclick="downloadFilteredExcel()" class="btn btn-primary" id="downloadFilteredBtn" style="display: none;">
+                        📥 Download Filtered Excel
+                    </button>
+                </div>
+            </div>
+            
+            <div class="search-section">
+                <div class="search-grid">
+                    <div class="form-group">
+                        <label for="searchVisitSales">Search Sales Person</label>
+                        <input type="text" id="searchVisitSales" placeholder="Enter sales person name to filter visits">
+                    </div>
+                    <button onclick="filterVisits()" class="btn btn-primary">
+                        🔍 Filter Visits
+                    </button>
+                    <button onclick="clearVisitFilter()" class="btn btn-secondary">
+                        🔄 Show All
+                    </button>
+                </div>
+            </div>
+            
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-number" id="totalVisits">0</div>
+                    <div class="stat-label">Total Visits</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="totalOrders">0</div>
+                    <div class="stat-label">Unique Shops</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="totalPayments">0</div>
+                    <div class="stat-label">Today's Visits</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="activeSales">0</div>
+                    <div class="stat-label">Active Sales People</div>
+                </div>
+            </div>
+            
+            <!-- Map Section for View Visits -->
+            <div style="background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); padding: 25px; border-radius: 20px; margin-bottom: 30px; border: 1px solid rgba(102, 126, 234, 0.1);">
+                <h3 style="margin-bottom: 20px; color: #2d3748; font-weight: 700;">🗺️ Visit Locations Map</h3>
+                <div style="display: flex; gap: 15px; margin-bottom: 20px; flex-wrap: wrap;">
+                    <button onclick="showAllVisitsOnMap()" class="btn btn-primary">
+                        🌍 Show All Visits
+                    </button>
+                    <button onclick="showFilteredVisitsOnMap()" class="btn btn-success" id="showFilteredMapBtn" style="display: none;">
+                        📍 Show Filtered Visits
+                    </button>
+                    <button onclick="focusOnCurrentUser()" class="btn btn-secondary">
+                        📍 Focus on Me
+                    </button>
+                </div>
+                <div id="visitsMap" style="height: 400px; border-radius: 15px; border: 3px solid rgba(102, 126, 234, 0.2); box-shadow: 0 8px 25px rgba(0,0,0,0.1);"></div>
+            </div>
+            
+            <div id="visitsList" class="visits-grid">
+                <div class="alert alert-info">
+                    No visits recorded yet. Add your first visit using the "Add Visit" tab.
+                </div>
+            </div>
+        </div>
+
+        <!-- Track Sales Tab -->
+        <div id="track-sales" class="tab-content">
+            <h2 style="margin-bottom: 20px; color: #333;">🗺️ Live Sales Tracking</h2>
+            
+            <div class="search-section">
+                <div class="search-grid">
+                    <div class="form-group">
+                        <label for="searchSales">Search Sales Person</label>
+                        <input type="text" id="searchSales" placeholder="Enter sales person name">
+                    </div>
+                    <button onclick="trackSalesPerson()" class="btn btn-primary">
+                        🔍 Track Location
+                    </button>
+                    <button onclick="showAllSales()" class="btn btn-secondary">
+                        👥 Show All
+                    </button>
+                </div>
+            </div>
+            
+            <div id="salesList" style="margin-bottom: 20px;"></div>
+            
+            <div class="map-container">
+                <div class="map-controls">
+                    <button onclick="refreshLiveLocations()" class="map-control-btn">
+                        🔄 Refresh Live
+                    </button>
+                    <button onclick="centerMapOnUser()" class="map-control-btn">
+                        📍 Center on Me
+                    </button>
+                    <button onclick="toggleSatelliteView()" class="map-control-btn" id="satelliteBtn">
+                        🛰️ Satellite
+                    </button>
+                </div>
+                <div id="map"></div>
+            </div>
+        </div>
+
+        <!-- Reports Tab -->
+        <div id="reports" class="tab-content">
+            <h2 style="margin-bottom: 20px; color: #333;">Sales Reports & Analytics</h2>
+            
+            <!-- Search and Download Section -->
+            <div class="search-section" style="margin-bottom: 30px;">
+                <h3 style="margin-bottom: 15px; color: #2d3748; font-weight: 700;">🔍 Search & Download Sales Person Data</h3>
+                <div class="search-grid">
+                    <div class="form-group">
+                        <label for="reportSearchSales">Search Sales Person</label>
+                        <input type="text" id="reportSearchSales" placeholder="Enter sales person name to search and download">
+                    </div>
+                    <button onclick="searchSalesPersonReport()" class="btn btn-primary">
+                        🔍 Search Report
+                    </button>
+                    <button onclick="clearReportSearch()" class="btn btn-secondary">
+                        🔄 Clear Search
+                    </button>
+                </div>
+                <div style="display: flex; gap: 10px; margin-top: 15px; justify-content: center;">
+                    <button onclick="downloadSearchedReport()" class="btn btn-success" id="downloadReportBtn" style="display: none;">
+                        📥 Download Report Excel
+                    </button>
+                    <button onclick="searchAndDownloadSalesPerson()" class="btn btn-success">
+                        📥 Quick Search & Download
+                    </button>
+                </div>
+                <div id="searchResultsInfo" style="margin-top: 15px; display: none;">
+                    <div class="alert alert-info" id="searchResultsText"></div>
+                </div>
+            </div>
+            
+            <!-- Report Generation Section -->
+            <div style="background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); padding: 25px; border-radius: 20px; margin-bottom: 30px; border: 1px solid rgba(102, 126, 234, 0.1);">
+                <h3 style="margin-bottom: 20px; color: #2d3748; font-weight: 700;">📊 Generate Detailed Report</h3>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="reportDateFrom">From Date</label>
+                        <input type="date" id="reportDateFrom">
+                    </div>
+                    <div class="form-group">
+                        <label for="reportDateTo">To Date</label>
+                        <input type="date" id="reportDateTo">
+                    </div>
+                    <div class="form-group">
+                        <label for="reportSalesPerson">Sales Person</label>
+                        <select id="reportSalesPerson">
+                            <option value="">All Sales People</option>
+                        </select>
+                    </div>
+                    <div style="display: flex; align-items: end;">
+                        <button onclick="generateReport()" class="btn btn-primary">
+                            📊 Generate Report
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="reportResults"></div>
+        </div>
+    </div>
+
+    <!-- Live Camera Modal -->
+    <div id="cameraModal" class="camera-modal">
+        <div class="camera-container">
+            <h3 style="margin-bottom: 20px; color: #2d3748; font-weight: 700;">📸 Capture Shop Photo</h3>
+            <video id="cameraVideo" class="camera-video" autoplay playsinline></video>
+            <canvas id="cameraCanvas" style="display: none;"></canvas>
+            <div class="camera-controls">
+                <button onclick="capturePhotoFromCamera()" class="btn btn-primary">
+                    📸 Capture Photo
+                </button>
+                <button onclick="closeLiveCamera()" class="btn btn-secondary">
+                    ❌ Cancel
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global variables
+        let visits = [];
+        let filteredVisits = [];
+        let map = null;
+        let visitsMap = null;
+        let salesMarkers = {};
+        let visitsMapMarkers = [];
+        let currentSalesPerson = localStorage.getItem('currentSalesPerson') || null;
+        let liveLocationWatchId = null;
+        let liveLocationMarker = null;
+        let liveLocationData = {};
+        let currentMapLayer = 'street';
+        let satelliteLayer = null;
+        let streetLayer = null;
+        
+        // Clear all existing fake data on page load
+        localStorage.removeItem('salesVisits');
+        localStorage.removeItem('liveLocationData');
+
+        // Initialize the application
+        document.addEventListener('DOMContentLoaded', function() {
+            if (!currentSalesPerson) {
+                showSetupModal();
+            } else {
+                initializeApp();
+            }
+        });
+
+        // Show setup modal for new users
+        function showSetupModal() {
+            document.getElementById('setupModal').style.display = 'flex';
+        }
+
+        // Setup sales person and start live tracking
+        function setupSalesPerson() {
+            const name = document.getElementById('salesPersonName').value.trim();
+            
+            if (!name) {
+                alert('Please enter your name to continue.');
+                return;
+            }
+            
+            currentSalesPerson = name;
+            localStorage.setItem('currentSalesPerson', name);
+            
+            document.getElementById('setupModal').style.display = 'none';
+            initializeApp();
+            startLiveLocationTracking();
+        }
+
+        // Initialize the main application
+        function initializeApp() {
+            loadSavedData();
+            updateStats();
+            displayVisits();
+            initializeMap();
+            populateSalesPersonDropdown();
+            setCurrentDateTime();
+            setSalesPersonName();
+            showLocationStatusBar();
+            startLiveLocationTracking();
+            getCurrentLocationDetails();
+        }
+        
+        // Load saved data from localStorage
+        function loadSavedData() {
+            try {
+                // Load visits
+                const savedVisits = localStorage.getItem('salesVisits');
+                if (savedVisits) {
+                    visits = JSON.parse(savedVisits);
+                    console.log(`Loaded ${visits.length} visits from storage`);
+                }
+                
+                // Load live location data
+                const savedLocationData = localStorage.getItem('liveLocationData');
+                if (savedLocationData) {
+                    liveLocationData = JSON.parse(savedLocationData);
+                    console.log(`Loaded live location data for ${Object.keys(liveLocationData).length} people`);
+                }
+            } catch (error) {
+                console.error('Error loading saved data:', error);
+                visits = [];
+                liveLocationData = {};
+            }
+        }
+
+        // Set sales person name in form (read-only)
+        function setSalesPersonName() {
+            document.getElementById('salesPerson').value = currentSalesPerson;
+            document.getElementById('currentSalesPersonName').textContent = `👤 ${currentSalesPerson}`;
+        }
+
+        // Show location status bar
+        function showLocationStatusBar() {
+            document.getElementById('locationStatusBar').style.display = 'flex';
+        }
+
+        // Get current location details with reverse geocoding
+        function getCurrentLocationDetails() {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    function(position) {
+                        const lat = position.coords.latitude;
+                        const lng = position.coords.longitude;
+                        
+                        // Show basic coordinates immediately
+                        showLocationDetails({
+                            latitude: lat,
+                            longitude: lng,
+                            accuracy: position.coords.accuracy,
+                            timestamp: new Date().toLocaleString()
+                        });
+                        
+                        // Get detailed address information
+                        reverseGeocode(lat, lng);
+                    },
+                    function(error) {
+                        console.error('Location error:', error);
+                        showLocationError('Unable to get current location. Please enable location services.');
+                    },
+                    {
+                        enableHighAccuracy: true,
+                        timeout: 10000,
+                        maximumAge: 60000
+                    }
+                );
+            } else {
+                showLocationError('Geolocation is not supported by this browser.');
+            }
+        }
+
+        // Reverse geocode to get detailed address
+        function reverseGeocode(lat, lng) {
+            // Using Nominatim (OpenStreetMap) reverse geocoding service
+            const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`;
+            
+            fetch(url)
+                .then(response => response.json())
+                .then(data => {
+                    if (data && data.address) {
+                        const address = data.address;
+                        const locationDetails = {
+                            latitude: lat,
+                            longitude: lng,
+                            accuracy: 'High Precision',
+                            timestamp: new Date().toLocaleString(),
+                            fullAddress: data.display_name || 'Address not available',
+                            houseNumber: address.house_number || 'N/A',
+                            road: address.road || address.street || 'N/A',
+                            neighbourhood: address.neighbourhood || address.suburb || 'N/A',
+                            locality: address.village || address.town || address.city_district || 'N/A',
+                            city: address.city || address.town || 'N/A',
+                            district: address.state_district || address.county || 'N/A',
+                            state: address.state || 'N/A',
+                            pincode: address.postcode || 'N/A',
+                            country: address.country || 'N/A'
+                        };
+                        
+                        showLocationDetails(locationDetails);
+                        
+                        // Auto-fill form fields if they're empty
+                        autoFillLocationFields(locationDetails);
+                    } else {
+                        showLocationDetails({
+                            latitude: lat,
+                            longitude: lng,
+                            accuracy: 'Coordinates Only',
+                            timestamp: new Date().toLocaleString(),
+                            error: 'Detailed address information not available'
+                        });
+                    }
+                })
+                .catch(error => {
+                    console.error('Reverse geocoding error:', error);
+                    showLocationDetails({
+                        latitude: lat,
+                        longitude: lng,
+                        accuracy: 'Coordinates Only',
+                        timestamp: new Date().toLocaleString(),
+                        error: 'Unable to fetch address details'
+                    });
+                });
+        }
+
+        // Auto-fill location fields in the form
+        function autoFillLocationFields(locationDetails) {
+            // Auto-fill district if empty
+            const districtField = document.getElementById('district');
+            if (!districtField.value && locationDetails.district !== 'N/A') {
+                districtField.value = locationDetails.district;
+            }
+            
+            // Auto-fill area if empty
+            const areaField = document.getElementById('area');
+            if (!areaField.value) {
+                const area = locationDetails.neighbourhood !== 'N/A' ? locationDetails.neighbourhood :
+                           locationDetails.locality !== 'N/A' ? locationDetails.locality :
+                           locationDetails.city !== 'N/A' ? locationDetails.city : '';
+                if (area) {
+                    areaField.value = area;
+                }
+            }
+            
+            // Auto-fill shop address if empty
+            const addressField = document.getElementById('shopAddress');
+            if (!addressField.value && locationDetails.fullAddress) {
+                // Use a shorter version of the address
+                const shortAddress = `${locationDetails.road !== 'N/A' ? locationDetails.road + ', ' : ''}${locationDetails.locality !== 'N/A' ? locationDetails.locality + ', ' : ''}${locationDetails.city !== 'N/A' ? locationDetails.city : ''}`;
+                if (shortAddress.trim()) {
+                    addressField.value = shortAddress.replace(/,$/, ''); // Remove trailing comma
+                }
+            }
+        }
+
+        // Show location details in the UI
+        function showLocationDetails(details) {
+            const container = document.getElementById('currentLocationDetails');
+            const grid = document.getElementById('locationDetailsGrid');
+            
+            let gridHTML = `
+                <div class="location-detail-item">
+                    <div class="location-detail-label">📍 Coordinates</div>
+                    <div class="location-detail-value">${details.latitude.toFixed(6)}, ${details.longitude.toFixed(6)}</div>
+                </div>
+                <div class="location-detail-item">
+                    <div class="location-detail-label">🎯 Accuracy</div>
+                    <div class="location-detail-value">${details.accuracy}</div>
+                </div>
+                <div class="location-detail-item">
+                    <div class="location-detail-label">🕒 Updated</div>
+                    <div class="location-detail-value">${details.timestamp}</div>
+                </div>
+            `;
+            
+            if (details.fullAddress) {
+                gridHTML += `
+                    <div class="location-detail-item" style="grid-column: 1 / -1;">
+                        <div class="location-detail-label">🏠 Full Address</div>
+                        <div class="location-detail-value">${details.fullAddress}</div>
+                    </div>
+                `;
+            }
+            
+            if (details.road && details.road !== 'N/A') {
+                gridHTML += `
+                    <div class="location-detail-item">
+                        <div class="location-detail-label">🛣️ Street/Road</div>
+                        <div class="location-detail-value">${details.road}</div>
+                    </div>
+                `;
+            }
+            
+            if (details.neighbourhood && details.neighbourhood !== 'N/A') {
+                gridHTML += `
+                    <div class="location-detail-item">
+                        <div class="location-detail-label">🏘️ Neighbourhood</div>
+                        <div class="location-detail-value">${details.neighbourhood}</div>
+                    </div>
+                `;
+            }
+            
+            if (details.locality && details.locality !== 'N/A') {
+                gridHTML += `
+                    <div class="location-detail-item">
+                        <div class="location-detail-label">📍 Locality</div>
+                        <div class="location-detail-value">${details.locality}</div>
+                    </div>
+                `;
+            }
+            
+            if (details.city && details.city !== 'N/A') {
+                gridHTML += `
+                    <div class="location-detail-item">
+                        <div class="location-detail-label">🏙️ City</div>
+                        <div class="location-detail-value">${details.city}</div>
+                    </div>
+                `;
+            }
+            
+            if (details.district && details.district !== 'N/A') {
+                gridHTML += `
+                    <div class="location-detail-item">
+                        <div class="location-detail-label">🏛️ District</div>
+                        <div class="location-detail-value">${details.district}</div>
+                    </div>
+                `;
+            }
+            
+            if (details.state && details.state !== 'N/A') {
+                gridHTML += `
+                    <div class="location-detail-item">
+                        <div class="location-detail-label">🗺️ State</div>
+                        <div class="location-detail-value">${details.state}</div>
+                    </div>
+                `;
+            }
+            
+            if (details.pincode && details.pincode !== 'N/A') {
+                gridHTML += `
+                    <div class="location-detail-item">
+                        <div class="location-detail-label">📮 Pincode</div>
+                        <div class="location-detail-value">${details.pincode}</div>
+                    </div>
+                `;
+            }
+            
+            if (details.error) {
+                gridHTML += `
+                    <div class="location-detail-item" style="grid-column: 1 / -1;">
+                        <div class="location-detail-label">⚠️ Note</div>
+                        <div class="location-detail-value" style="color: #d69e2e;">${details.error}</div>
+                    </div>
+                `;
+            }
+            
+            grid.innerHTML = gridHTML;
+            container.style.display = 'block';
+        }
+
+        // Show location error
+        function showLocationError(message) {
+            const container = document.getElementById('currentLocationDetails');
+            const grid = document.getElementById('locationDetailsGrid');
+            
+            grid.innerHTML = `
+                <div class="location-detail-item" style="grid-column: 1 / -1; border-left-color: #f56565;">
+                    <div class="location-detail-label" style="color: #c53030;">❌ Location Error</div>
+                    <div class="location-detail-value" style="color: #c53030;">${message}</div>
+                </div>
+            `;
+            
+            container.style.display = 'block';
+            container.style.background = 'linear-gradient(135deg, #fed7d7 0%, #feb2b2 100%)';
+            container.style.borderColor = '#f56565';
+        }
+
+        // Start live location tracking
+        function startLiveLocationTracking() {
+            if (!navigator.geolocation) {
+                updateLocationStatus('❌ Geolocation not supported', false);
+                return;
+            }
+
+            const options = {
+                enableHighAccuracy: true,
+                timeout: 10000,
+                maximumAge: 30000 // 30 seconds
+            };
+
+            // Start watching position
+            liveLocationWatchId = navigator.geolocation.watchPosition(
+                function(position) {
+                    updateLiveLocation(position.coords.latitude, position.coords.longitude);
+                    updateLocationStatus('🟢 Live location active', true);
+                },
+                function(error) {
+                    console.error('Location error:', error);
+                    updateLocationStatus('🔴 Location access denied', false);
+                },
+                options
+            );
+
+            // Update location every 30 seconds
+            setInterval(() => {
+                if (navigator.geolocation && liveLocationWatchId) {
+                    navigator.geolocation.getCurrentPosition(
+                        function(position) {
+                            updateLiveLocation(position.coords.latitude, position.coords.longitude);
+                        },
+                        function(error) {
+                            console.error('Location update error:', error);
+                        }
+                    );
+                }
+            }, 30000);
+        }
+
+        // Update live location data
+        function updateLiveLocation(latitude, longitude) {
+            const timestamp = new Date().toISOString();
+            
+            liveLocationData[currentSalesPerson] = {
+                latitude: latitude,
+                longitude: longitude,
+                timestamp: timestamp,
+                lastSeen: new Date().toLocaleString()
+            };
+            
+            localStorage.setItem('liveLocationData', JSON.stringify(liveLocationData));
+            
+            // Update map if it's initialized and track sales tab is active
+            if (map && document.getElementById('track-sales').classList.contains('active')) {
+                updateLiveLocationOnMap();
+            }
+        }
+
+        // Update location status in the status bar
+        function updateLocationStatus(message, isOnline) {
+            const statusBar = document.getElementById('locationStatusBar');
+            const statusText = document.getElementById('locationStatusText');
+            
+            statusText.textContent = message;
+            
+            if (isOnline) {
+                statusBar.classList.remove('offline');
+            } else {
+                statusBar.classList.add('offline');
+            }
+        }
+
+        // Update live location marker on map
+        function updateLiveLocationOnMap() {
+            if (!liveLocationData[currentSalesPerson]) return;
+            
+            const locationData = liveLocationData[currentSalesPerson];
+            
+            // Remove existing live marker
+            if (liveLocationMarker) {
+                map.removeLayer(liveLocationMarker);
+            }
+            
+            // Create custom live location icon
+            const liveIcon = L.divIcon({
+                className: 'live-marker',
+                iconSize: [25, 25],
+                iconAnchor: [12, 12],
+                html: `
+                    <div style="
+                        background: #48bb78; 
+                        border: 4px solid white; 
+                        border-radius: 50%; 
+                        width: 25px; 
+                        height: 25px; 
+                        box-shadow: 0 0 20px rgba(72, 187, 120, 0.8); 
+                        animation: liveMarkerPulse 2s infinite;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        color: white;
+                        font-weight: bold;
+                        font-size: 10px;
+                    ">●</div>
+                `
+            });
+            
+            // Add new live marker
+            liveLocationMarker = L.marker([locationData.latitude, locationData.longitude], {
+                icon: liveIcon
+            }).bindPopup(`
+                <div style="text-align: center; min-width: 200px;">
+                    <strong style="color: #48bb78;">🔴 YOUR LIVE LOCATION</strong><br>
+                    <strong style="font-size: 1.1em;">${currentSalesPerson}</strong><br>
+                    <hr style="margin: 10px 0;">
+                    <div style="text-align: left;">
+                        <strong>📍 Coordinates:</strong><br>
+                        Lat: ${locationData.latitude.toFixed(6)}<br>
+                        Lng: ${locationData.longitude.toFixed(6)}<br>
+                        <strong>🕒 Last Updated:</strong><br>
+                        ${locationData.lastSeen}<br>
+                    </div>
+                    <hr style="margin: 10px 0;">
+                    <span style="color: #48bb78; font-weight: bold; font-size: 1.1em;">
+                        ● CURRENTLY ACTIVE
+                    </span>
+                </div>
+            `);
+            
+            liveLocationMarker.addTo(map);
+        }
+        
+        // Set current date and time (non-editable)
+        function setCurrentDateTime() {
+            const now = new Date();
+            const localDateTime = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+            document.getElementById('visitDateTime').value = localDateTime;
+        }
+
+        // Tab switching functionality
+        function showTab(tabName) {
+            // Hide all tabs
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            // Remove active class from all nav tabs
+            document.querySelectorAll('.nav-tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            // Show selected tab
+            document.getElementById(tabName).classList.add('active');
+            
+            // Add active class to clicked nav tab
+            event.target.classList.add('active');
+            
+            // Initialize maps based on selected tab
+            if (tabName === 'track-sales') {
+                if (!map) {
+                    setTimeout(initializeMap, 100);
+                } else {
+                    // Update live locations when switching to track sales tab
+                    setTimeout(updateAllLiveLocations, 100);
+                }
+            } else if (tabName === 'view-visits') {
+                if (!visitsMap) {
+                    setTimeout(initializeVisitsMap, 100);
+                } else {
+                    // Refresh visits map when switching to view visits tab
+                    setTimeout(showAllVisitsOnMap, 100);
+                }
+            } else if (tabName === 'add-visit') {
+                // Refresh location details when switching to add visit tab
+                setTimeout(getCurrentLocationDetails, 100);
+            }
+        }
+
+        // Form submission handler
+        document.getElementById('visitForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            // Validate required fields
+            const requiredFields = ['shopName', 'shopAddress', 'contactPerson', 'phoneNumber', 'coordinatorName', 'tenure', 'district', 'area', 'visitType'];
+            let isValid = true;
+            
+            for (let field of requiredFields) {
+                const element = document.getElementById(field);
+                if (!element.value.trim()) {
+                    element.style.borderColor = '#f56565';
+                    isValid = false;
+                } else {
+                    element.style.borderColor = '#e2e8f0';
+                }
+            }
+            
+            if (!isValid) {
+                alert('❌ Please fill in all required fields (highlighted in red).');
+                return;
+            }
+            
+            // Show loading state
+            const submitBtn = document.querySelector('#visitForm button[type="submit"]');
+            const originalText = submitBtn.innerHTML;
+            submitBtn.innerHTML = '📍 Getting Location & Saving...';
+            submitBtn.disabled = true;
+            
+            // Get current location with detailed address
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(function(position) {
+                    const lat = position.coords.latitude;
+                    const lng = position.coords.longitude;
+                    
+                    // Get detailed address and save visit
+                    reverseGeocodeAndSave(lat, lng, submitBtn, originalText);
+                }, function(error) {
+                    console.error('Location error:', error);
+                    alert('⚠️ Location access denied. Visit will be saved without detailed location data.');
+                    saveVisit(null, null, null, submitBtn, originalText);
+                }, {
+                    enableHighAccuracy: true,
+                    timeout: 10000,
+                    maximumAge: 60000
+                });
+            } else {
+                alert('⚠️ Geolocation is not supported by this browser.');
+                saveVisit(null, null, null, submitBtn, originalText);
+            }
+        });
+
+        // Reverse geocode and save visit
+        function reverseGeocodeAndSave(lat, lng, submitBtn, originalText) {
+            const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`;
+            
+            fetch(url)
+                .then(response => response.json())
+                .then(data => {
+                    let locationDetails = null;
+                    
+                    if (data && data.address) {
+                        const address = data.address;
+                        locationDetails = {
+                            fullAddress: data.display_name || 'Address not available',
+                            road: address.road || address.street || 'N/A',
+                            neighbourhood: address.neighbourhood || address.suburb || 'N/A',
+                            locality: address.village || address.town || address.city_district || 'N/A',
+                            city: address.city || address.town || 'N/A',
+                            district: address.state_district || address.county || 'N/A',
+                            state: address.state || 'N/A',
+                            pincode: address.postcode || 'N/A',
+                            country: address.country || 'N/A'
+                        };
+                    }
+                    
+                    saveVisit(lat, lng, locationDetails, submitBtn, originalText);
+                })
+                .catch(error => {
+                    console.error('Reverse geocoding error:', error);
+                    saveVisit(lat, lng, null, submitBtn, originalText);
+                });
+        }
+
+        // Save visit data
+        function saveVisit(latitude, longitude, locationDetails, submitBtn, originalText) {
+            try {
+                // Get captured image data
+                const capturedImage = document.getElementById('capturedImage');
+                const shopPhotoData = capturedImage && capturedImage.src && capturedImage.src !== '' ? capturedImage.src : null;
+                
+                const visit = {
+                    id: Date.now(),
+                    visitDateTime: document.getElementById('visitDateTime').value,
+                    salesPerson: document.getElementById('salesPerson').value.trim(),
+                    shopName: document.getElementById('shopName').value.trim(),
+                    shopAddress: document.getElementById('shopAddress').value.trim(),
+                    contactPerson: document.getElementById('contactPerson').value.trim(),
+                    phoneNumber: document.getElementById('phoneNumber').value.trim(),
+                    coordinatorName: document.getElementById('coordinatorName').value.trim(),
+                    tenure: document.getElementById('tenure').value.trim(),
+                    district: document.getElementById('district').value.trim(),
+                    area: document.getElementById('area').value.trim(),
+                    visitType: document.getElementById('visitType').value,
+                    visitNotes: document.getElementById('visitNotes').value.trim(),
+                    shopPhoto: shopPhotoData,
+                    visitDate: new Date().toISOString(),
+                    latitude: latitude,
+                    longitude: longitude,
+                    locationDetails: locationDetails,
+                    timestamp: new Date().toLocaleString(),
+                    locationStatus: latitude && longitude ? 'Located' : 'No Location'
+                };
+                
+                // Add to visits array
+                visits.push(visit);
+                
+                // Save to localStorage with error handling
+                try {
+                    localStorage.setItem('salesVisits', JSON.stringify(visits));
+                    console.log('Visit saved successfully:', visit);
+                } catch (storageError) {
+                    console.error('Storage error:', storageError);
+                    alert('⚠️ Warning: Visit data may not be permanently saved due to storage limitations.');
+                }
+                
+                // Reset form (except sales person name)
+                document.getElementById('visitForm').reset();
+                setCurrentDateTime();
+                setSalesPersonName(); // Restore sales person name
+                removePhoto();
+                
+                // Reset button state
+                if (submitBtn && originalText) {
+                    submitBtn.innerHTML = originalText;
+                    submitBtn.disabled = false;
+                }
+                
+                // Update all displays
+                updateStats();
+                displayVisits();
+                populateSalesPersonDropdown();
+                
+                // Show success message with details
+                let locationMsg = '📍 No location data captured';
+                if (latitude && longitude) {
+                    locationMsg = `📍 Location: ${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
+                    if (locationDetails && locationDetails.fullAddress) {
+                        locationMsg += `\n🏠 Address: ${locationDetails.fullAddress}`;
+                        if (locationDetails.pincode !== 'N/A') {
+                            locationMsg += `\n📮 Pincode: ${locationDetails.pincode}`;
+                        }
+                    }
+                }
+                
+                alert(`✅ Visit saved successfully!\n\n🏪 Shop: ${visit.shopName}\n👤 Sales Person: ${visit.salesPerson}\n${locationMsg}\n📅 Date: ${new Date(visit.visitDate).toLocaleString()}`);
+                
+                // Auto-switch to View Visits tab to show the new entry
+                setTimeout(() => {
+                    showTab('view-visits');
+                    // Update the active tab button
+                    document.querySelectorAll('.nav-tab').forEach(tab => tab.classList.remove('active'));
+                    document.querySelectorAll('.nav-tab')[1].classList.add('active'); // View Visits is the second tab
+                }, 1000);
+                
+            } catch (error) {
+                console.error('Error saving visit:', error);
+                alert('❌ Error saving visit. Please try again.');
+                
+                // Reset button state
+                if (submitBtn && originalText) {
+                    submitBtn.innerHTML = originalText;
+                    submitBtn.disabled = false;
+                }
+            }
+        }
+
+        // Update statistics
+        function updateStats() {
+            const totalVisits = visits.length;
+            const uniqueSales = [...new Set(visits.map(visit => visit.salesPerson))].length;
+            const totalShops = [...new Set(visits.map(visit => visit.shopName))].length;
+            const todayVisits = visits.filter(visit => {
+                const visitDate = new Date(visit.visitDate);
+                const today = new Date();
+                return visitDate.toDateString() === today.toDateString();
+            }).length;
+            
+            document.getElementById('totalVisits').textContent = totalVisits;
+            document.getElementById('totalOrders').textContent = totalShops;
+            document.getElementById('totalPayments').textContent = todayVisits;
+            document.getElementById('activeSales').textContent = uniqueSales;
+        }
+
+        // Display visits
+        function displayVisits() {
+            const visitsList = document.getElementById('visitsList');
+            
+            if (visits.length === 0) {
+                visitsList.innerHTML = '<div class="alert alert-info">No visits recorded yet. Add your first visit using the "Add Visit" tab.</div>';
+                return;
+            }
+            
+            const sortedVisits = visits.sort((a, b) => new Date(b.visitDate) - new Date(a.visitDate));
+            
+            visitsList.innerHTML = sortedVisits.map(visit => `
+                <div class="visit-card">
+                    <div class="visit-header">
+                        <div class="visit-title">${visit.shopName}</div>
+                        <div class="visit-date">${new Date(visit.visitDate).toLocaleDateString()}</div>
+                    </div>
+                    <div class="visit-details">
+                        <div class="visit-detail">
+                            <div class="visit-detail-label">Visit Date & Time</div>
+                            <div class="visit-detail-value">${visit.visitDateTime ? new Date(visit.visitDateTime).toLocaleString() : new Date(visit.visitDate).toLocaleString()}</div>
+                        </div>
+                        <div class="visit-detail">
+                            <div class="visit-detail-label">Sales Person</div>
+                            <div class="visit-detail-value">${visit.salesPerson}</div>
+                        </div>
+                        <div class="visit-detail">
+                            <div class="visit-detail-label">Contact Person</div>
+                            <div class="visit-detail-value">${visit.contactPerson}</div>
+                        </div>
+                        <div class="visit-detail">
+                            <div class="visit-detail-label">Phone Number</div>
+                            <div class="visit-detail-value">${visit.phoneNumber || 'N/A'}</div>
+                        </div>
+                        <div class="visit-detail">
+                            <div class="visit-detail-label">SS Coordinator</div>
+                            <div class="visit-detail-value">${visit.coordinatorName || 'N/A'}</div>
+                        </div>
+                        <div class="visit-detail">
+                            <div class="visit-detail-label">Tenure</div>
+                            <div class="visit-detail-value">${visit.tenure || 'N/A'}</div>
+                        </div>
+                        <div class="visit-detail">
+                            <div class="visit-detail-label">District</div>
+                            <div class="visit-detail-value">${visit.district || 'N/A'}</div>
+                        </div>
+                        <div class="visit-detail">
+                            <div class="visit-detail-label">Area</div>
+                            <div class="visit-detail-value">${visit.area || 'N/A'}</div>
+                        </div>
+                        <div class="visit-detail">
+                            <div class="visit-detail-label">Visit Type</div>
+                            <div class="visit-detail-value">${visit.visitType}</div>
+                        </div>
+                        <div class="visit-detail">
+                            <div class="visit-detail-label">Address</div>
+                            <div class="visit-detail-value">${visit.shopAddress}</div>
+                        </div>
+                        ${visit.locationDetails && visit.locationDetails.pincode !== 'N/A' ? `
+                        <div class="visit-detail">
+                            <div class="visit-detail-label">Pincode</div>
+                            <div class="visit-detail-value">${visit.locationDetails.pincode}</div>
+                        </div>
+                        ` : ''}
+                        <div class="visit-detail">
+                            <div class="visit-detail-label">Notes</div>
+                            <div class="visit-detail-value">${visit.visitNotes || 'No notes'}</div>
+                        </div>
+                        ${visit.shopPhoto ? `
+                        <div class="visit-detail" style="grid-column: 1 / -1;">
+                            <div class="visit-detail-label">Shop Photo</div>
+                            <div class="visit-detail-value">
+                                <img src="${visit.shopPhoto}" style="max-width: 300px; max-height: 200px; border-radius: 10px; border: 2px solid #e9ecef; cursor: pointer;" onclick="window.open('${visit.shopPhoto}', '_blank')">
+                            </div>
+                        </div>
+                        ` : ''}
+                        ${visit.locationDetails && visit.locationDetails.fullAddress ? `
+                        <div class="visit-detail" style="grid-column: 1 / -1;">
+                            <div class="visit-detail-label">Full Location Address</div>
+                            <div class="visit-detail-value">${visit.locationDetails.fullAddress}</div>
+                        </div>
+                        ` : ''}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Initialize map with enhanced features
+        function initializeMap() {
+            if (map) return;
+            
+            map = L.map('map').setView([28.6139, 77.2090], 10); // Default to Delhi
+            
+            // Street layer (default)
+            streetLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors'
+            });
+            
+            // Satellite layer
+            satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+                attribution: '© Esri, Maxar, GeoEye, Earthstar Geographics, CNES/Airbus DS, USDA, USGS, AeroGRID, IGN, and the GIS User Community'
+            });
+            
+            // Add default street layer
+            streetLayer.addTo(map);
+            
+            // Add all visit locations to map
+            visits.forEach(visit => {
+                if (visit.latitude && visit.longitude) {
+                    const marker = L.marker([visit.latitude, visit.longitude])
+                        .bindPopup(`
+                            <strong>${visit.shopName}</strong><br>
+                            Sales Person: ${visit.salesPerson}<br>
+                            Date: ${new Date(visit.visitDate).toLocaleDateString()}<br>
+                            Visit Type: ${visit.visitType}
+                        `);
+                    
+                    if (!salesMarkers[visit.salesPerson]) {
+                        salesMarkers[visit.salesPerson] = [];
+                    }
+                    salesMarkers[visit.salesPerson].push(marker);
+                    marker.addTo(map);
+                }
+            });
+
+            // Add live locations
+            updateAllLiveLocations();
+        }
+
+        // Toggle satellite view
+        function toggleSatelliteView() {
+            const btn = document.getElementById('satelliteBtn');
+            
+            if (currentMapLayer === 'street') {
+                map.removeLayer(streetLayer);
+                map.addLayer(satelliteLayer);
+                currentMapLayer = 'satellite';
+                btn.textContent = '🗺️ Street';
+                btn.classList.add('active');
+            } else {
+                map.removeLayer(satelliteLayer);
+                map.addLayer(streetLayer);
+                currentMapLayer = 'street';
+                btn.textContent = '🛰️ Satellite';
+                btn.classList.remove('active');
+            }
+        }
+
+        // Refresh live locations
+        function refreshLiveLocations() {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    function(position) {
+                        updateLiveLocation(position.coords.latitude, position.coords.longitude);
+                        updateAllLiveLocations();
+                        alert('✅ Live locations refreshed!');
+                    },
+                    function(error) {
+                        console.error('Location refresh error:', error);
+                        alert('❌ Unable to refresh location. Please check permissions.');
+                    }
+                );
+            }
+        }
+
+        // Center map on current user
+        function centerMapOnUser() {
+            if (liveLocationData[currentSalesPerson]) {
+                const locationData = liveLocationData[currentSalesPerson];
+                map.setView([locationData.latitude, locationData.longitude], 15);
+                
+                if (liveLocationMarker) {
+                    liveLocationMarker.openPopup();
+                }
+            } else {
+                alert('Your live location is not available. Please ensure location tracking is enabled.');
+            }
+        }
+
+        // Update all live locations on map
+        function updateAllLiveLocations() {
+            if (!map) return;
+            
+            Object.keys(liveLocationData).forEach(salesPerson => {
+                const locationData = liveLocationData[salesPerson];
+                const isCurrentUser = salesPerson === currentSalesPerson;
+                
+                // Create custom live location icon
+                const liveIcon = L.divIcon({
+                    className: 'live-marker',
+                    iconSize: [25, 25],
+                    iconAnchor: [12, 12],
+                    html: `
+                        <div style="
+                            background: ${isCurrentUser ? '#48bb78' : '#4299e1'}; 
+                            border: 4px solid white; 
+                            border-radius: 50%; 
+                            width: 25px; 
+                            height: 25px; 
+                            box-shadow: 0 0 20px rgba(${isCurrentUser ? '72, 187, 120' : '66, 153, 225'}, 0.8); 
+                            animation: liveMarkerPulse 2s infinite;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            color: white;
+                            font-weight: bold;
+                            font-size: 10px;
+                        ">●</div>
+                    `
+                });
+                
+                // Add live marker
+                const liveMarker = L.marker([locationData.latitude, locationData.longitude], {
+                    icon: liveIcon
+                }).bindPopup(`
+                    <div style="text-align: center; min-width: 200px;">
+                        <strong style="color: ${isCurrentUser ? '#48bb78' : '#4299e1'};">
+                            ${isCurrentUser ? '🔴 YOUR LIVE LOCATION' : '🟦 LIVE LOCATION'}
+                        </strong><br>
+                        <strong style="font-size: 1.1em;">${salesPerson}</strong><br>
+                        <hr style="margin: 10px 0;">
+                        <div style="text-align: left;">
+                            <strong>📍 Coordinates:</strong><br>
+                            Lat: ${locationData.latitude.toFixed(6)}<br>
+                            Lng: ${locationData.longitude.toFixed(6)}<br>
+                            <strong>🕒 Last Updated:</strong><br>
+                            ${locationData.lastSeen}<br>
+                        </div>
+                        <hr style="margin: 10px 0;">
+                        <span style="color: ${isCurrentUser ? '#48bb78' : '#4299e1'}; font-weight: bold; font-size: 1.1em;">
+                            ● CURRENTLY ACTIVE
+                        </span>
+                    </div>
+                `);
+                
+                liveMarker.addTo(map);
+                
+                if (isCurrentUser) {
+                    liveLocationMarker = liveMarker;
+                }
+            });
+        }
+
+        // Track specific sales person
+        function trackSalesPerson() {
+            const searchName = document.getElementById('searchSales').value.trim().toLowerCase();
+            
+            if (!searchName) {
+                alert('Please enter a sales person name to track.');
+                return;
+            }
+            
+            // Clear existing markers
+            map.eachLayer(layer => {
+                if (layer instanceof L.Marker) {
+                    map.removeLayer(layer);
+                }
+            });
+            
+            // Find sales visits with exact and partial matching
+            const salesVisits = visits.filter(visit => 
+                visit.salesPerson.toLowerCase().includes(searchName)
+            );
+            
+            // Find live location with exact and partial matching
+            const liveLocationKeys = Object.keys(liveLocationData).filter(person => 
+                person.toLowerCase().includes(searchName)
+            );
+            
+            const bounds = [];
+            let foundData = false;
+            
+            // Add visit markers for historical data
+            salesVisits.forEach(visit => {
+                if (visit.latitude && visit.longitude) {
+                    const marker = L.marker([visit.latitude, visit.longitude], {
+                        icon: L.icon({
+                            iconUrl: 'data:image/svg+xml;base64,' + btoa(`
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#e53e3e" width="24" height="24">
+                                    <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+                                </svg>
+                            `),
+                            iconSize: [30, 30],
+                            iconAnchor: [15, 30],
+                            popupAnchor: [0, -30]
+                        })
+                    }).bindPopup(`
+                        <div style="text-align: center; min-width: 200px;">
+                            <strong style="color: #e53e3e;">📍 VISIT LOCATION</strong><br>
+                            <strong>${visit.shopName}</strong><br>
+                            <hr style="margin: 8px 0;">
+                            <strong>Sales Person:</strong> ${visit.salesPerson}<br>
+                            <strong>Date:</strong> ${new Date(visit.visitDate).toLocaleDateString()}<br>
+                            <strong>Visit Type:</strong> ${visit.visitType}<br>
+                            <strong>Address:</strong> ${visit.shopAddress}<br>
+                            ${visit.contactPerson ? `<strong>Contact:</strong> ${visit.contactPerson}<br>` : ''}
+                            ${visit.phoneNumber ? `<strong>Phone:</strong> ${visit.phoneNumber}<br>` : ''}
+                            ${visit.locationDetails && visit.locationDetails.pincode !== 'N/A' ? `<strong>Pincode:</strong> ${visit.locationDetails.pincode}<br>` : ''}
+                            <hr style="margin: 8px 0;">
+                            <small style="color: #666;">Historical visit data</small>
+                        </div>
+                    `);
+                    marker.addTo(map);
+                    bounds.push([visit.latitude, visit.longitude]);
+                    foundData = true;
+                }
+            });
+            
+            // Add live location markers for current location
+            liveLocationKeys.forEach(liveLocationPerson => {
+                const locationData = liveLocationData[liveLocationPerson];
+                const isCurrentUser = liveLocationPerson === currentSalesPerson;
+                
+                const liveIcon = L.divIcon({
+                    className: 'live-marker-search',
+                    iconSize: [35, 35],
+                    iconAnchor: [17, 17],
+                    html: `
+                        <div style="
+                            background: ${isCurrentUser ? '#48bb78' : '#4299e1'}; 
+                            border: 4px solid white; 
+                            border-radius: 50%; 
+                            width: 35px; 
+                            height: 35px; 
+                            box-shadow: 0 0 25px rgba(${isCurrentUser ? '72, 187, 120' : '66, 153, 225'}, 0.8); 
+                            animation: liveMarkerPulse 1.5s infinite;
+                            position: relative;
+                        ">
+                            <div style="
+                                position: absolute;
+                                top: 50%;
+                                left: 50%;
+                                transform: translate(-50%, -50%);
+                                color: white;
+                                font-weight: bold;
+                                font-size: 12px;
+                            ">●</div>
+                        </div>
+                    `
+                });
+                
+                const liveMarker = L.marker([locationData.latitude, locationData.longitude], {
+                    icon: liveIcon
+                }).bindPopup(`
+                    <div style="text-align: center; min-width: 250px;">
+                        <strong style="color: ${isCurrentUser ? '#48bb78' : '#4299e1'};">
+                            ${isCurrentUser ? '🔴 YOUR LIVE LOCATION' : '🟦 LIVE LOCATION'}
+                        </strong><br>
+                        <strong style="font-size: 1.1em;">${liveLocationPerson}</strong><br>
+                        <hr style="margin: 10px 0;">
+                        <strong>📍 Coordinates:</strong><br>
+                        Lat: ${locationData.latitude.toFixed(6)}<br>
+                        Lng: ${locationData.longitude.toFixed(6)}<br>
+                        <hr style="margin: 10px 0;">
+                        <strong>🕒 Last Updated:</strong><br>
+                        ${locationData.lastSeen}<br>
+                        <hr style="margin: 10px 0;">
+                        <span style="color: ${isCurrentUser ? '#48bb78' : '#4299e1'}; font-weight: bold; font-size: 1.1em;">
+                            ● CURRENTLY ACTIVE
+                        </span>
+                    </div>
+                `);
+                
+                liveMarker.addTo(map);
+                bounds.push([locationData.latitude, locationData.longitude]);
+                foundData = true;
+            });
+            
+            if (!foundData) {
+                alert(`❌ No location data found for "${searchName}".\n\nPossible reasons:\n• Sales person name doesn't match exactly\n• No visits recorded yet\n• Location tracking not enabled\n• Person is not currently online`);
+                return;
+            }
+            
+            // Fit map to show all markers
+            if (bounds.length > 0) {
+                map.fitBounds(bounds, { padding: [20, 20] });
+            }
+            
+            // Update sales list with detailed information
+            updateSalesListDetailed(liveLocationKeys, salesVisits, searchName);
+        }
+
+        // Show all sales people
+        function showAllSales() {
+            // Clear search
+            document.getElementById('searchSales').value = '';
+            
+            // Clear existing markers
+            map.eachLayer(layer => {
+                if (layer instanceof L.Marker) {
+                    map.removeLayer(layer);
+                }
+            });
+            
+            // Add all visit markers
+            visits.forEach(visit => {
+                if (visit.latitude && visit.longitude) {
+                    const marker = L.marker([visit.latitude, visit.longitude])
+                        .bindPopup(`
+                            <strong>${visit.shopName}</strong><br>
+                            Sales Person: ${visit.salesPerson}<br>
+                            Date: ${new Date(visit.visitDate).toLocaleDateString()}<br>
+                            Visit Type: ${visit.visitType}
+                        `);
+                    marker.addTo(map);
+                }
+            });
+            
+            // Add all live locations
+            updateAllLiveLocations();
+            
+            // Update sales list
+            const allLiveSales = Object.keys(liveLocationData);
+            updateSalesList(allLiveSales, visits.length);
+        }
+
+        // Update sales list display
+        function updateSalesList(salesPeople, totalVisits = 0) {
+            const salesList = document.getElementById('salesList');
+            
+            if (salesPeople.length === 0) {
+                salesList.innerHTML = `
+                    <div class="alert alert-info">
+                        No live sales people found. ${totalVisits > 0 ? 'Historical visit data is shown on the map.' : 'No visit data available.'}
+                    </div>
+                `;
+                return;
+            }
+            
+            salesList.innerHTML = `
+                <div style="background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); padding: 20px; border-radius: 15px; margin-bottom: 15px; border: 1px solid rgba(102, 126, 234, 0.1);">
+                    <h4 style="margin-bottom: 15px; color: #2d3748; font-weight: 700;">🔴 Live Sales People (${salesPeople.length}):</h4>
+                    ${salesPeople.map(person => {
+                        const locationData = liveLocationData[person];
+                        const isCurrentUser = person === currentSalesPerson;
+                        const lastVisit = visits
+                            .filter(v => v.salesPerson === person)
+                            .sort((a, b) => new Date(b.visitDate) - new Date(a.visitDate))[0];
+                        
+                        return `
+                            <div style="display: inline-block; margin: 8px 12px 8px 0; padding: 12px 20px; background: white; border-radius: 25px; border: 2px solid ${isCurrentUser ? '#48bb78' : '#4299e1'}; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
+                                <div style="display: flex; align-items: center; gap: 10px;">
+                                    <div class="status-indicator status-online" style="background: ${isCurrentUser ? '#48bb78' : '#4299e1'};"></div>
+                                    <div>
+                                        <strong style="color: #2d3748;">${person} ${isCurrentUser ? '(You)' : ''}</strong>
+                                        <div style="font-size: 0.85rem; color: #6c757d; margin-top: 2px;">
+                                            📍 Last seen: ${locationData ? locationData.lastSeen : 'Unknown'}
+                                        </div>
+                                        ${lastVisit ? `
+                                            <div style="font-size: 0.8rem; color: #4a5568; margin-top: 2px;">
+                                                🏪 Last visit: ${new Date(lastVisit.visitDate).toLocaleDateString()}
+                                            </div>
+                                        ` : ''}
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+            `;
+        }
+        
+        // Update sales list with detailed search information
+        function updateSalesListDetailed(liveLocationKeys, salesVisits, searchName) {
+            const salesList = document.getElementById('salesList');
+            
+            const liveCount = liveLocationKeys.length;
+            const visitCount = salesVisits.length;
+            const uniqueShops = [...new Set(salesVisits.map(v => v.shopName))].length;
+            
+            salesList.innerHTML = `
+                <div style="background: linear-gradient(135deg, #e6fffa 0%, #b2f5ea 100%); padding: 25px; border-radius: 20px; margin-bottom: 20px; border-left: 6px solid #38b2ac;">
+                    <h4 style="color: #234e52; margin-bottom: 15px; font-weight: 800;">🔍 Search Results for "${searchName}"</h4>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px;">
+                        <div style="background: white; padding: 15px; border-radius: 12px; text-align: center; border: 2px solid #38b2ac;">
+                            <div style="font-size: 1.5rem; font-weight: bold; color: #38b2ac;">${liveCount}</div>
+                            <div style="font-size: 0.9rem; color: #234e52;">Live Locations</div>
+                        </div>
+                        <div style="background: white; padding: 15px; border-radius: 12px; text-align: center; border: 2px solid #3182ce;">
+                            <div style="font-size: 1.5rem; font-weight: bold; color: #3182ce;">${visitCount}</div>
+                            <div style="font-size: 0.9rem; color: #234e52;">Total Visits</div>
+                        </div>
+                        <div style="background: white; padding: 15px; border-radius: 12px; text-align: center; border: 2px solid #805ad5;">
+                            <div style="font-size: 1.5rem; font-weight: bold; color: #805ad5;">${uniqueShops}</div>
+                            <div style="font-size: 0.9rem; color: #234e52;">Unique Shops</div>
+                        </div>
+                    </div>
+                    
+                    ${liveCount > 0 ? `
+                        <h5 style="color: #234e52; margin-bottom: 10px; font-weight: 700;">🟢 Currently Online:</h5>
+                        ${liveLocationKeys.map(person => {
+                            const locationData = liveLocationData[person];
+                            const isCurrentUser = person === currentSalesPerson;
+                            const personVisits = salesVisits.filter(v => v.salesPerson === person);
+                            
+                            return `
+                                <div style="background: white; margin: 10px 0; padding: 15px; border-radius: 15px; border: 2px solid ${isCurrentUser ? '#48bb78' : '#4299e1'}; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                                        <div>
+                                            <strong style="color: #2d3748; font-size: 1.1em;">${person} ${isCurrentUser ? '(You)' : ''}</strong>
+                                            <div style="color: ${isCurrentUser ? '#48bb78' : '#4299e1'}; font-weight: bold; font-size: 0.9em;">● LIVE NOW</div>
+                                        </div>
+                                        <div style="text-align: right;">
+                                            <div style="font-size: 0.85rem; color: #6c757d;">📍 Last Update</div>
+                                            <div style="font-size: 0.9rem; font-weight: bold; color: #2d3748;">${locationData.lastSeen}</div>
+                                        </div>
+                                    </div>
+                                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; font-size: 0.85rem;">
+                                        <div>
+                                            <strong>📍 Coordinates:</strong><br>
+                                            ${locationData.latitude.toFixed(4)}, ${locationData.longitude.toFixed(4)}
+                                        </div>
+                                        <div>
+                                            <strong>🏪 Total Visits:</strong><br>
+                                            ${personVisits.length} visits
+                                        </div>
+                                        <div>
+                                            <strong>🏢 Unique Shops:</strong><br>
+                                            ${[...new Set(personVisits.map(v => v.shopName))].length} shops
+                                        </div>
+                                    </div>
+                                </div>
+                            `;
+                        }).join('')}
+                    ` : ''}
+                    
+                    ${visitCount > 0 && liveCount === 0 ? `
+                        <div style="background: #fff3cd; border: 2px solid #ffc107; border-radius: 12px; padding: 15px; margin-top: 15px;">
+                            <strong style="color: #856404;">⚠️ Found historical visit data but no live location</strong><br>
+                            <span style="color: #856404; font-size: 0.9rem;">This person has ${visitCount} recorded visits but is not currently online.</span>
+                        </div>
+                    ` : ''}
+                    
+                    ${liveCount === 0 && visitCount === 0 ? `
+                        <div style="background: #f8d7da; border: 2px solid #dc3545; border-radius: 12px; padding: 15px; margin-top: 15px;">
+                            <strong style="color: #721c24;">❌ No data found</strong><br>
+                            <span style="color: #721c24; font-size: 0.9rem;">No live location or visit history found for "${searchName}".</span>
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        }
+
+        // Populate sales person dropdown for reports
+        function populateSalesPersonDropdown() {
+            const dropdown = document.getElementById('reportSalesPerson');
+            const uniqueSales = [...new Set(visits.map(visit => visit.salesPerson))];
+            
+            dropdown.innerHTML = '<option value="">All Sales People</option>' +
+                uniqueSales.map(person => `<option value="${person}">${person}</option>`).join('');
+        }
+
+        // Generate report
+        function generateReport() {
+            const fromDate = document.getElementById('reportDateFrom').value;
+            const toDate = document.getElementById('reportDateTo').value;
+            const salesPerson = document.getElementById('reportSalesPerson').value;
+            
+            let filteredVisits = visits;
+            
+            // Filter by date range
+            if (fromDate) {
+                filteredVisits = filteredVisits.filter(visit => 
+                    new Date(visit.visitDate) >= new Date(fromDate)
+                );
+            }
+            
+            if (toDate) {
+                filteredVisits = filteredVisits.filter(visit => 
+                    new Date(visit.visitDate) <= new Date(toDate + 'T23:59:59')
+                );
+            }
+            
+            // Filter by sales person
+            if (salesPerson) {
+                filteredVisits = filteredVisits.filter(visit => 
+                    visit.salesPerson === salesPerson
+                );
+            }
+            
+            // Generate report
+            const totalVisits = filteredVisits.length;
+            const totalShops = [...new Set(filteredVisits.map(visit => visit.shopName))].length;
+            const avgVisitsPerDay = totalVisits > 0 ? (totalVisits / Math.max(1, Math.ceil((new Date(toDate || new Date()) - new Date(fromDate || new Date())) / (1000 * 60 * 60 * 24)))).toFixed(1) : 0;
+            
+            // Group by sales person
+            const salesReport = {};
+            filteredVisits.forEach(visit => {
+                if (!salesReport[visit.salesPerson]) {
+                    salesReport[visit.salesPerson] = {
+                        visits: 0,
+                        shops: new Set()
+                    };
+                }
+                salesReport[visit.salesPerson].visits++;
+                salesReport[visit.salesPerson].shops.add(visit.shopName);
+            });
+            
+            // Display report
+            const reportResults = document.getElementById('reportResults');
+            reportResults.innerHTML = `
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-number">${totalVisits}</div>
+                        <div class="stat-label">Total Visits</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">${totalShops}</div>
+                        <div class="stat-label">Unique Shops</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">${avgVisitsPerDay}</div>
+                        <div class="stat-label">Avg Visits/Day</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">${Object.keys(salesReport).length}</div>
+                        <div class="stat-label">Active Sales People</div>
+                    </div>
+                </div>
+                
+                <h3 style="margin: 30px 0 20px 0; color: #333;">Sales Person Performance</h3>
+                <div class="visits-grid">
+                    ${Object.entries(salesReport).map(([person, data]) => `
+                        <div class="visit-card">
+                            <div class="visit-header">
+                                <div class="visit-title">${person}</div>
+                                <div class="visit-date">${data.shops.size} shops</div>
+                            </div>
+                            <div class="visit-details">
+                                <div class="visit-detail">
+                                    <div class="visit-detail-label">Total Visits</div>
+                                    <div class="visit-detail-value">${data.visits}</div>
+                                </div>
+                                <div class="visit-detail">
+                                    <div class="visit-detail-label">Unique Shops</div>
+                                    <div class="visit-detail-value">${data.shops.size}</div>
+                                </div>
+                                <div class="visit-detail">
+                                    <div class="visit-detail-label">Avg Visits/Shop</div>
+                                    <div class="visit-detail-value">${(data.visits / data.shops.size).toFixed(1)}</div>
+                                </div>
+                                <div class="visit-detail">
+                                    <div class="visit-detail-label">Live Status</div>
+                                    <div class="visit-detail-value">
+                                        ${liveLocationData[person] ? 
+                                            `<span style="color: #48bb78;">🟢 Online</span>` : 
+                                            `<span style="color: #f56565;">🔴 Offline</span>`
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        // Filter visits by sales person
+        function filterVisits() {
+            const searchName = document.getElementById('searchVisitSales').value.trim().toLowerCase();
+            
+            if (!searchName) {
+                alert('Please enter a sales person name to filter.');
+                return;
+            }
+            
+            filteredVisits = visits.filter(visit => 
+                visit.salesPerson.toLowerCase().includes(searchName)
+            );
+            
+            if (filteredVisits.length === 0) {
+                alert('No visits found for this sales person.');
+                return;
+            }
+            
+            displayFilteredVisits();
+            document.getElementById('downloadFilteredBtn').style.display = 'inline-flex';
+            document.getElementById('showFilteredMapBtn').style.display = 'inline-flex';
+            
+            // Show filtered visits on map if map is initialized
+            if (visitsMap) {
+                showFilteredVisitsOnMap();
+            }
+        }
+        
+        // Clear visit filter
+        function clearVisitFilter() {
+            document.getElementById('searchVisitSales').value = '';
+            filteredVisits = [];
+            displayVisits();
+            document.getElementById('downloadFilteredBtn').style.display = 'none';
+            document.getElementById('showFilteredMapBtn').style.display = 'none';
+            
+            // Show all visits on map if map is initialized
+            if (visitsMap) {
+                showAllVisitsOnMap();
+            }
+        }
+        
+        // Display filtered visits
+        function displayFilteredVisits() {
+            const visitsList = document.getElementById('visitsList');
+            const sortedVisits = filteredVisits.sort((a, b) => new Date(b.visitDate) - new Date(a.visitDate));
+            
+            visitsList.innerHTML = sortedVisits.map(visit => `
+                <div class="visit-card">
+                    <div class="visit-header">
+                        <div class="visit-title">${visit.shopName}</div>
+                        <div class="visit-date">${visit.visitDateTime ? new Date(visit.visitDateTime).toLocaleDateString() : new Date(visit.visitDate).toLocaleDateString()}</div>
+                    </div>
+                    <div class="visit-details">
+                        <div class="visit-detail">
+                            <div class="visit-detail-label">Visit Date & Time</div>
+                            <div class="visit-detail-value">${visit.visitDateTime ? new Date(visit.visitDateTime).toLocaleString() : new Date(visit.visitDate).toLocaleString()}</div>
+                        </div>
+                        <div class="visit-detail">
+                            <div class="visit-detail-label">Sales Person</div>
+                            <div class="visit-detail-value">${visit.salesPerson}</div>
+                        </div>
+                        <div class="visit-detail">
+                            <div class="visit-detail-label">Contact Person</div>
+                            <div class="visit-detail-value">${visit.contactPerson}</div>
+                        </div>
+                        <div class="visit-detail">
+                            <div class="visit-detail-label">Phone Number</div>
+                            <div class="visit-detail-value">${visit.phoneNumber || 'N/A'}</div>
+                        </div>
+                        <div class="visit-detail">
+                            <div class="visit-detail-label">SS Coordinator</div>
+                            <div class="visit-detail-value">${visit.coordinatorName || 'N/A'}</div>
+                        </div>
+                        <div class="visit-detail">
+                            <div class="visit-detail-label">Tenure</div>
+                            <div class="visit-detail-value">${visit.tenure || 'N/A'}</div>
+                        </div>
+                        <div class="visit-detail">
+                            <div class="visit-detail-label">District</div>
+                            <div class="visit-detail-value">${visit.district || 'N/A'}</div>
+                        </div>
+                        <div class="visit-detail">
+                            <div class="visit-detail-label">Area</div>
+                            <div class="visit-detail-value">${visit.area || 'N/A'}</div>
+                        </div>
+                        <div class="visit-detail">
+                            <div class="visit-detail-label">Visit Type</div>
+                            <div class="visit-detail-value">${visit.visitType}</div>
+                        </div>
+                        <div class="visit-detail">
+                            <div class="visit-detail-label">Address</div>
+                            <div class="visit-detail-value">${visit.shopAddress}</div>
+                        </div>
+                        ${visit.locationDetails && visit.locationDetails.pincode !== 'N/A' ? `
+                        <div class="visit-detail">
+                            <div class="visit-detail-label">Pincode</div>
+                            <div class="visit-detail-value">${visit.locationDetails.pincode}</div>
+                        </div>
+                        ` : ''}
+                        <div class="visit-detail">
+                            <div class="visit-detail-label">Notes</div>
+                            <div class="visit-detail-value">${visit.visitNotes || 'No notes'}</div>
+                        </div>
+                        ${visit.shopPhoto ? `
+                        <div class="visit-detail" style="grid-column: 1 / -1;">
+                            <div class="visit-detail-label">Shop Photo</div>
+                            <div class="visit-detail-value">
+                                <img src="${visit.shopPhoto}" style="max-width: 300px; max-height: 200px; border-radius: 10px; border: 2px solid #e9ecef; cursor: pointer;" onclick="window.open('${visit.shopPhoto}', '_blank')">
+                            </div>
+                        </div>
+                        ` : ''}
+                        ${visit.locationDetails && visit.locationDetails.fullAddress ? `
+                        <div class="visit-detail" style="grid-column: 1 / -1;">
+                            <div class="visit-detail-label">Full Location Address</div>
+                            <div class="visit-detail-value">${visit.locationDetails.fullAddress}</div>
+                        </div>
+                        ` : ''}
+                    </div>
+                </div>
+            `).join('');
+        }
+        
+        // Download filtered Excel
+        function downloadFilteredExcel() {
+            if (filteredVisits.length === 0) {
+                alert('No filtered data to download.');
+                return;
+            }
+            
+            downloadExcelData(filteredVisits, 'filtered_sales_visits');
+        }
+        
+        // Download Excel functionality
+        function downloadExcel() {
+            if (visits.length === 0) {
+                alert('No data to download. Please add some visits first.');
+                return;
+            }
+            
+            downloadExcelData(visits, 'all_sales_visits');
+        }
+        
+        // Common Excel downloa<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'9776b304a7607a12',t:'MTc1NjU4MjE5MS4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script>
